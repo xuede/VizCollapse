@@ -1,0 +1,19 @@
+body {
+  font-family: sans-serif;
+}
+#photon {
+  width: 10px;
+  height: 10px;
+  background-color: red;
+  position: absolute;
+  left: 50px;
+  top: 0;
+}
+#detector {
+  width: 100px;
+  height: 10px;
+  background-color: lightgray;
+  position: absolute;
+  left: 20px;
+  top: 100px;
+}
