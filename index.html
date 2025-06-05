@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quantum Pinball</title>
+<style>
+  body{margin:0;font-family:sans-serif;background:#111;color:#eee;display:flex;flex-direction:column;align-items:center;min-height:100vh}
+  canvas{background:#222;max-width:100%;height:auto;border:1px solid #333}
+  #controls{display:flex;gap:10px;margin:10px;align-items:center}
+  .hist{width:120px;height:200px;background:#333;position:relative}
+  .bar{position:absolute;bottom:0;width:100%;background:#4caf50;text-align:center}
+  label{display:block}
+</style>
+</head>
+<body>
+<h1>Quantum Pinball</h1>
+<canvas id="sim" width="600" height="300"></canvas>
+<div id="controls">
+  <label>ΔL <input id="path" type="range" min="0" max="2" step="0.01" value="0"></label>
+  <label><input id="single" type="checkbox" checked> Single Photon</label>
+</div>
+<p>Click an arm to toggle a detector.</p>
+<div style="display:flex;gap:20px">
+  <div class="hist" id="histA"><div class="bar" style="height:0%"></div></div>
+  <div class="hist" id="histB"><div class="bar" style="height:0%"></div></div>
+</div>
+<script>
+'use strict'
+const canvas=document.getElementById('sim');
+const c=canvas.getContext('2d');
+const W=600,H=300,lambda=0.5; // wavelength units
+let photons=[],counts=[0,0],single=true,deltaL=0,
+    detU=false,detL=false;
+const pathSlider=document.getElementById('path');
+const singleBox=document.getElementById('single');
+
+pathSlider.oninput=()=>deltaL=parseFloat(pathSlider.value);
+singleBox.onchange=()=>single=singleBox.checked;
+canvas.addEventListener('click',e=>{
+  const r=canvas.getBoundingClientRect();
+  const x=e.clientX-r.left,y=e.clientY-r.top;
+  if(Math.abs(x-250)<30){
+    if(Math.abs(y-100)<20) detU=!detU;
+    if(Math.abs(y-200)<20) detL=!detL;
+  }
+});
+
+function spawn(){
+  if(single && photons.length) return;
+  photons.push({x:50,y:H/2,t:0,arm:null,coherent:true});
+}
+
+function drawInterferometer(){
+  c.strokeStyle='#888';c.lineWidth=2;c.beginPath();
+  c.moveTo(50,H/2);c.lineTo(150,H/2);
+  c.moveTo(150,H/2);c.lineTo(250,100); // upper
+  c.moveTo(150,H/2);c.lineTo(250,200); // lower
+  c.moveTo(250,100);c.lineTo(350,100);
+  c.moveTo(250,200);c.lineTo(350,200);
+  c.moveTo(350,100);c.lineTo(450,H/2);
+  c.moveTo(350,200);c.lineTo(450,H/2);
+  c.moveTo(450,H/2);c.lineTo(550,H/2);
+  c.stroke();
+  if(detU){c.fillStyle='red';c.fillRect(290,90,10,10);}
+  if(detL){c.fillStyle='red';c.fillRect(290,190,10,10);}
+  c.fillStyle='white';c.fillRect(560,125,20,20);c.fillRect(560,155,20,20);
+  c.fillText('A',565,138);c.fillText('B',565,168);
+}
+
+function movePhoton(p){
+  const speed=2;
+  if(p.t<50) p.x+=speed; // to splitter
+  else if(p.t<100){
+    if(p.coherent)p.arm='both';
+    if(p.arm==='both'){p.x+=speed;p.y+=p.t<75?-speed/2:speed/2;}
+  } else if(p.t<150){
+    p.x+=speed;
+    if(p.arm==='upper')p.y=100;
+    if(p.arm==='lower')p.y=200;
+    if(detU&&p.y===100){p.coherent=false;p.arm='upper';}
+    if(detL&&p.y===200){p.coherent=false;p.arm='lower';}
+  } else if(p.t<200){
+    if(p.coherent){
+      const phase=Math.PI*deltaL/lambda;
+      const probA=Math.pow(Math.cos(phase),2);
+      p.arm=Math.random()<probA?'upper':'lower';
+    } else if(!p.arm){
+      p.arm=Math.random()<0.5?'upper':'lower';
+    }
+    p.x+=speed;
+    if(p.arm==='upper')p.y-=speed/2;
+    if(p.arm==='lower')p.y+=speed/2;
+  } else {
+    const idx=p.arm==='upper'?0:1;
+    counts[idx]++;updateHist();
+    return false;
+  }
+  p.t+=speed;return true;
+}
+
+function drawPhoton(p){
+  c.strokeStyle='rgba(0,255,255,0.3)';c.beginPath();
+  for(let dx=0;dx<20;dx++){
+    const x=p.x-dx,y=p.y+Math.sin((p.t-dx)/6)*5;
+    dx?c.lineTo(x,y):c.moveTo(x,y);
+  }
+  c.stroke();
+  c.fillStyle='cyan';c.beginPath();c.arc(p.x,p.y,3,0,Math.PI*2);c.fill();
+}
+
+function update(){
+  c.clearRect(0,0,W,H);
+  drawInterferometer();
+  spawn();
+  photons=photons.filter(movePhoton);
+  photons.forEach(drawPhoton);
+  requestAnimationFrame(update);
+}
+
+function updateHist(){
+  ['histA','histB'].forEach((id,i)=>{
+    const total=counts[0]+counts[1];
+    const pct=total?counts[i]/total*100:0;
+    const el=document.querySelector('#'+id+' .bar');
+    el.style.height=pct+'%';el.textContent=counts[i];
+  });
+}
+update();
+</script>
+</body>
+</html>
